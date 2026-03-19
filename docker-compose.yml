@@ -1,0 +1,17 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: local-db-multimedia
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: dbm
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./src/common/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+
+volumes:
+  pgdata:
