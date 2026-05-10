@@ -1,4 +1,4 @@
-from ..utils.cosin import cosine_distance
+from ..utils.cosin import cosine_similarity
 import io
 import os
 import time
@@ -28,13 +28,18 @@ class MVideo:
     HOG_BLOCK_SIZE = int(os.getenv("HOG_BLOCK_SIZE", 2))
     HOG_RESIZE = (128, 128)
 
+    # Cấu hình Texture (LBP + GLCM)
+    TEXTURE_LBP_BINS = int(os.getenv("TEXTURE_LBP_BINS", 256))
+    TEXTURE_GLCM_LEVELS = int(os.getenv("TEXTURE_GLCM_LEVELS", 8))
+    TEXTURE_GLCM_DISTANCE = int(os.getenv("TEXTURE_GLCM_DISTANCE", 1))
+
     # Ngưỡng keyframe
-    HIST_THRESHOLD = float(os.getenv("HIST_THRESHOLD", 0.3))
-    HOG_THRESHOLD = float(os.getenv("HOG_THRESHOLD", 0.3))
+    THRESHOLD = float(os.getenv("HIST_THRESHOLD", 0.6))
 
     # Trọng số kết hợp vector
     HIS_W = float(os.getenv("HIS_W", 0.5))
     HOG_W = float(os.getenv("HOG_W", 0.5))
+    TEXT_W = float(os.getenv("TEXT_W", 0.5))
 
     def __init__(self, url):
         self.url = url
@@ -114,12 +119,11 @@ class MVideo:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-    def _get_key_frames(self, hist_threshold=None, hog_threshold=None):
-        h_thresh = hist_threshold or self.HIST_THRESHOLD
-        g_thresh = hog_threshold or self.HOG_THRESHOLD
-
+    def _get_key_frames(self):
+        thresh = self.THRESHOLD
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
         cap = None
+        
         try:
             os.write(tmp_fd, self.mp4)
             os.close(tmp_fd)
@@ -148,14 +152,14 @@ class MVideo:
                 mf = MFrame(frame, *self.HOG_RESIZE, frame_idx=frame_idx, timestamp_sec=timestamp)
                 mf.compute_his(self.HIST_BINS, self.HIST_RANGES)
                 mf.compute_hog(self.HOG_BINS, self.HOG_CELL_SIZE, self.HOG_BLOCK_SIZE)
-                mf.compute_vec(self.HIS_W, self.HOG_W)
+                mf.compute_texture(self.TEXTURE_LBP_BINS,self.TEXTURE_GLCM_LEVELS,self.TEXTURE_GLCM_DISTANCE,)
+                mf.compute_vec(self.HIS_W, self.HOG_W, self.TEXT_W)
 
                 if prev_mframe is None:
                     is_keyframe = True
                 else:
-                    hist_dist = cosine_distance(prev_mframe.vec_his, mf.vec_his)
-                    hog_dist = cosine_distance(prev_mframe.vec_hog, mf.vec_hog)
-                    is_keyframe = hist_dist > h_thresh or hog_dist > g_thresh
+                    cosine = cosine_similarity(prev_mframe.vec, mf.vec)
+                    is_keyframe = cosine < thresh
 
                 if is_keyframe:
                     keyframes.append(mf)
@@ -201,4 +205,4 @@ class MVideo:
                 vector=mf.vec.tolist() if mf.vec is not None else None,
                 video_id=video_id,
             ))
-        return entities
+        return entities

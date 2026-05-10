@@ -7,7 +7,7 @@ from .hog import HOG
 from .texture import Texture
 
 class MFrame:
-    def __init__(self, frame, new_w, new_h, frame_idx, timestamp_sec):
+    def __init__(self, frame, new_w, new_h, frame_idx=None, timestamp_sec=None):
         self.frame = frame
         self.w = new_w
         self.h = new_h
@@ -17,6 +17,7 @@ class MFrame:
         self.gray = None
         self.vec_his = None
         self.vec_hog = None
+        self.vec_texture = None
         self.vec = None
 
         self._to_another_img()
@@ -42,4 +43,6 @@ class MFrame:
         self.vec_texture = texture.vec
 
     def compute_vec(self, his_w, hog_w, text_w):
+        if self.vec_his is None or self.vec_hog is None or self.vec_texture is None:
+            raise ValueError("Call compute_his/compute_hog/compute_texture before compute_vec")
         self.vec = np.concatenate((self.vec_his * his_w, self.vec_hog * hog_w, self.vec_texture * text_w))

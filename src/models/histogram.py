@@ -1,6 +1,8 @@
 import numpy as np
 import math
 
+from ..utils.l2nor import l2nor
+
 
 class Histogram:
     def __init__(self,img,bins,ranges):
@@ -11,10 +13,7 @@ class Histogram:
         self.img = img
 
     def compute(self):
-        
         self._compute_histogram()
-        self._normalize_vec_1D()
-        
         return self.vec
 
     def _compute_histogram(self):
@@ -40,13 +39,4 @@ class Histogram:
                 self.vec_3D[i,j,k] += 1
 
         self.vec = self.vec_3D.flatten()
-
-    def _normalize_vec_1D(self):
-        #sum = sqrt(pixeli * pixeli) i = {0->n)
-        tmp = 0.0
-        for val in self.vec:
-            tmp += val * val
-
-        tmp = math.sqrt(tmp)
-        if tmp != 0:
-            self.vec /= tmp
+        l2nor(self.vec)

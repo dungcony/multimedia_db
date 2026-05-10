@@ -1,5 +1,7 @@
 import numpy as np
 
+from ..utils.l2nor import l2nor
+
 
 DEFAULT_LBP_BINS     = 256
 DEFAULT_GLCM_LEVELS  = 8
@@ -48,6 +50,7 @@ class Texture:
 
         # Tính vector đặc trưng
         self.vec = self._compute()
+        l2nor(self.vec)
 
     # ------------------------------------------------------------------
     # Bước 1 — Grayscale

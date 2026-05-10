@@ -2,7 +2,7 @@
 
 Flow:
   1. Nhận ảnh đầu vào (BGR numpy array hoặc file path)
-  2. Trích xuất vector đặc trưng (Histogram + HOG)
+    2. Trích xuất vector đặc trưng (Histogram + HOG + Texture)
   3. Lấy tất cả frames từ DB
   4. Tính cosine similarity giữa ảnh query và từng frame
   5. Gom nhóm theo video_id, giữ cosine similarity cao nhất
@@ -37,9 +37,15 @@ HOG_CELL_SIZE = int(os.getenv("HOG_CELL_SIZE", 8))
 HOG_BLOCK_SIZE = int(os.getenv("HOG_BLOCK_SIZE", 2))
 HOG_RESIZE = (128, 128)
 
+# Cấu hình Texture (LBP + GLCM)
+TEXTURE_LBP_BINS = int(os.getenv("TEXTURE_LBP_BINS", 256))
+TEXTURE_GLCM_LEVELS = int(os.getenv("TEXTURE_GLCM_LEVELS", 8))
+TEXTURE_GLCM_DISTANCE = int(os.getenv("TEXTURE_GLCM_DISTANCE", 1))
+
 # Trọng số kết hợp vector
 HIS_W = float(os.getenv("HIS_W", 0.5))
 HOG_W = float(os.getenv("HOG_W", 0.5))
+TEXT_W = float(os.getenv("TEXT_W", 0.2))
 
 
 def extract_query_vector(image_bgr: np.ndarray) -> np.ndarray:
@@ -49,7 +55,7 @@ def extract_query_vector(image_bgr: np.ndarray) -> np.ndarray:
         image_bgr: Ảnh BGR numpy array (đọc từ cv2.imread hoặc upload).
 
     Returns:
-        np.ndarray: Vector đặc trưng đã kết hợp Histogram + HOG.
+        np.ndarray: Vector đặc trưng đã kết hợp Histogram + HOG + Texture.
     """
     mf = MFrame(
         frame=image_bgr,
@@ -60,7 +66,8 @@ def extract_query_vector(image_bgr: np.ndarray) -> np.ndarray:
     )
     mf.compute_his(HIST_BINS, HIST_RANGES)
     mf.compute_hog(HOG_BINS, HOG_CELL_SIZE, HOG_BLOCK_SIZE)
-    mf.compute_vec(HIS_W, HOG_W)
+    mf.compute_texture(TEXTURE_LBP_BINS, TEXTURE_GLCM_LEVELS, TEXTURE_GLCM_DISTANCE)
+    mf.compute_vec(HIS_W, HOG_W, TEXT_W)
     return mf.vec
 
 

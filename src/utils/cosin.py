@@ -1,19 +1,7 @@
 
 import math
 
-def cosine_distance(vec_a, vec_b):
-    """Tính cosine distance giữa 2 vector.
-
-    cosine_distance = 1 - cosine_similarity
-    Giá trị 0 → giống hoàn toàn, 1 → khác hoàn toàn.
-
-    Args:
-        vec_a: Vector numpy thứ nhất.
-        vec_b: Vector numpy thứ hai.
-
-    Returns:
-        float: Cosine distance trong khoảng [0, 1].
-    """
+def cosine_similarity(vec_a, vec_b):
     dot = 0.0
     norm_a = 0.0
     norm_b = 0.0
@@ -31,4 +19,4 @@ def cosine_distance(vec_a, vec_b):
     similarity = dot / (norm_a * norm_b)
     # Clamp để tránh lỗi floating point
     similarity = max(-1.0, min(1.0, similarity))
-    return 1.0 - similarity
+    return similarity

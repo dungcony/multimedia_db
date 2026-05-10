@@ -1,6 +1,8 @@
 import math
 import numpy as np
 
+from ..utils.l2nor import l2nor
+
 
 class HOG:
     def __init__(self,img,bins,cell_size,block_size):
@@ -23,6 +25,7 @@ class HOG:
         self._compute_magnitude_angle()
         self._compute_cell_histogram()
         self._normalize_block_histogram()
+        l2nor(self.vec)
         return self.vec
 
     # Tính gradient Gx và Gy cho từng pixel
