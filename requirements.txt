@@ -9,4 +9,6 @@ dotenv
 matplotlib
 requests
 pyodbc
-requests
+flask
+flask-cors
+pgvector

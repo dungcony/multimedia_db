@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hệ thống truy vấn video bằng hình ảnh - Multimedia Database System">
+    <title>🎬 Video Search | Multimedia DB</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Background animated particles -->
+    <div class="bg-particles" id="bg-particles"></div>
+
+    <!-- Main container -->
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header" id="app-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon">
+                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                            <rect x="2" y="2" width="32" height="32" rx="8" stroke="url(#logo-grad)" stroke-width="2.5"/>
+                            <polygon points="14,10 14,26 27,18" fill="url(#logo-grad)"/>
+                            <defs>
+                                <linearGradient id="logo-grad" x1="0" y1="0" x2="36" y2="36">
+                                    <stop offset="0%" stop-color="#6366f1"/>
+                                    <stop offset="100%" stop-color="#a855f7"/>
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <h1>Video Search</h1>
+                        <span class="logo-subtitle">Multimedia Database System</span>
+                    </div>
+                </div>
+                <div class="header-status">
+                    <div class="status-dot" id="status-dot"></div>
+                    <span class="status-text" id="status-text">Sẵn sàng</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main content -->
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section" id="upload-section">
+                <div class="section-header">
+                    <h2>
+                        <span class="section-icon">🖼️</span>
+                        Tải ảnh truy vấn
+                    </h2>
+                    <p class="section-desc">Upload một hình ảnh để tìm video tương đồng trong cơ sở dữ liệu</p>
+                </div>
+
+                <div class="upload-area" id="upload-area">
+                    <input type="file" id="file-input" accept="image/*" hidden>
+                    
+                    <!-- Default state -->
+                    <div class="upload-placeholder" id="upload-placeholder">
+                        <div class="upload-icon-wrapper">
+                            <svg class="upload-icon" width="64" height="64" viewBox="0 0 64 64" fill="none">
+                                <rect x="8" y="12" width="48" height="40" rx="6" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4"/>
+                                <path d="M32 24V44M24 32L32 24L40 32" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <p class="upload-text">Kéo thả ảnh vào đây hoặc</p>
+                        <button class="btn-browse" id="btn-browse">Chọn ảnh</button>
+                        <p class="upload-hint">PNG, JPG, JPEG, BMP, WEBP • Tối đa 16MB</p>
+                    </div>
+
+                    <!-- Preview state -->
+                    <div class="upload-preview" id="upload-preview" style="display: none;">
+                        <div class="preview-image-wrapper">
+                            <img id="preview-image" alt="Preview ảnh truy vấn">
+                        </div>
+                        <div class="preview-info">
+                            <div class="preview-name" id="preview-name"></div>
+                            <div class="preview-meta" id="preview-meta"></div>
+                            <div class="preview-actions">
+                                <button class="btn-change" id="btn-change">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M2 14H14M8 2V10M4 6L8 2L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    Đổi ảnh
+                                </button>
+                                <button class="btn-search" id="btn-search">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/>
+                                        <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                    </svg>
+                                    Tìm kiếm
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Loading State -->
+            <section class="loading-section" id="loading-section" style="display: none;">
+                <div class="loading-card">
+                    <div class="loading-spinner">
+                        <div class="spinner-ring"></div>
+                        <div class="spinner-ring delay-1"></div>
+                        <div class="spinner-ring delay-2"></div>
+                    </div>
+                    <h3 class="loading-title">Đang tìm kiếm...</h3>
+                    <p class="loading-desc" id="loading-desc">Trích xuất đặc trưng từ ảnh</p>
+                    <div class="loading-steps">
+                        <div class="step active" id="step-1">
+                            <div class="step-dot"></div>
+                            <span>Trích xuất đặc trưng</span>
+                        </div>
+                        <div class="step" id="step-2">
+                            <div class="step-dot"></div>
+                            <span>So sánh với database</span>
+                        </div>
+                        <div class="step" id="step-3">
+                            <div class="step-dot"></div>
+                            <span>Xếp hạng kết quả</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="results-section" style="display: none;">
+                <div class="results-header">
+                    <div class="results-title-row">
+                        <h2>
+                            <span class="section-icon">🎯</span>
+                            Kết quả tìm kiếm
+                        </h2>
+                        <span class="results-count" id="results-count"></span>
+                    </div>
+                    <p class="results-subtitle" id="results-subtitle"></p>
+                </div>
+
+                <div class="results-grid" id="results-grid">
+                    <!-- Results will be injected here -->
+                </div>
+
+                <!-- Search Again -->
+                <div class="search-again">
+                    <button class="btn-search-again" id="btn-search-again">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                            <path d="M2 9C2 5.134 5.134 2 9 2C12.866 2 16 5.134 16 9C16 12.866 12.866 16 9 16C6.5 16 4.3 14.7 3.1 12.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            <path d="M2 13V9H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Tìm kiếm mới
+                    </button>
+                </div>
+            </section>
+
+            <!-- Error Section -->
+            <section class="error-section" id="error-section" style="display: none;">
+                <div class="error-card">
+                    <div class="error-icon">⚠️</div>
+                    <h3 class="error-title">Có lỗi xảy ra</h3>
+                    <p class="error-message" id="error-message"></p>
+                    <button class="btn-retry" id="btn-retry">Thử lại</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>Multimedia Database System • PTIT • 2026</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
