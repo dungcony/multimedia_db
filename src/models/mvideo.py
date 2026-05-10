@@ -19,8 +19,8 @@ class MVideo:
     DOWNLOAD_RETRIES = 3
 
     # Cấu hình Histogram (HSV)
-    HIST_BINS = int(os.getenv("HIST_BINS", 8))
-    HIST_RANGES = os.getenv("HIST_RANGES", "0,180,0,256,0,256")
+    HIST_BINS = tuple(int(x) for x in os.getenv("HIST_BINS", "8,4,4").split(","))
+    HIST_RANGES = [int(x) for x in os.getenv("HIST_RANGES", "0,180,0,256,0,256").split(",")]
 
     # Cấu hình HOG
     HOG_BINS = int(os.getenv("HOG_BINS", 9))
@@ -119,13 +119,14 @@ class MVideo:
         g_thresh = hog_threshold or self.HOG_THRESHOLD
 
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
+        cap = None
         try:
             os.write(tmp_fd, self.mp4)
             os.close(tmp_fd)
 
             cap = cv2.VideoCapture(tmp_path)
             if not cap.isOpened():
-                raise ValueError(f"Không thể mở video: {tmp_path}")
+                raise ValueError(f"Cannot open video: {tmp_path}")
 
             self.fps = cap.get(cv2.CAP_PROP_FPS)
             self.frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -162,10 +163,42 @@ class MVideo:
 
                 frame_idx += 1
 
-            cap.release()
             self.frames = keyframes
             return keyframes
 
         finally:
+            # Release cap TRUOC khi xoa file (tranh PermissionError tren Windows)
+            if cap is not None:
+                cap.release()
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
+
+
+    def model_to_entity(self):
+        """Chuyển MVideo model → Video entity (SQLAlchemy ORM)."""
+        from ..entities.video import Video
+
+        return Video(
+            cloudinary_url=self.url,
+            fps=self.fps,
+            frame_count=self.frame_count,
+            width=self.width,
+            height=self.height,
+            duration_sec=self.duration_sec,
+            file_size_bytes=self.file_size_bytes,
+            keyframe_count=len(self.frames),
+        )
+
+    def frames_to_entities(self, video_id):
+        """Chuyển danh sách MFrame → list Frame entities."""
+        from ..entities.frame import Frame
+
+        entities = []
+        for mf in self.frames:
+            entities.append(Frame(
+                index=mf.frame_idx,
+                timestamp_sec=mf.timestamp_sec,
+                vector=mf.vec.tolist() if mf.vec is not None else None,
+                video_id=video_id,
+            ))
+        return entities

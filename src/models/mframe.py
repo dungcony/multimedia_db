@@ -1,12 +1,13 @@
 import numpy as np
+import cv2
 
-from models.rgb import RGB
-
+from .rgb import RGB
 from .histogram import Histogram
+from .hog import HOG
 
 
 class MFrame:
-    def __init__(self,frame,new_w,new_h,frame_idx,timestamp_sec):
+    def __init__(self, frame, new_w, new_h, frame_idx, timestamp_sec):
         self.frame = frame
         self.w = new_w
         self.h = new_h
@@ -17,29 +18,24 @@ class MFrame:
         self.vec_his = None
         self.vec_hog = None
         self.vec = None
-        
-        self._to_another_img()
-        
-    def _to_another_img(self):
-        # Chuyển đổi frame sang định dạng khác nếu cần (ví dụ: RGB → HSV)
-        
-        rgb = RGB(self.frame)
-        rgb.resize(self.w,self.h)
-        
-        self.hsv = rgb.to_hsv()
-        self.gray = rgb.to_gray()
 
-    def compute_his(self,bins,ranges):
-    
+        self._to_another_img()
+
+    def _to_another_img(self):
+        # Resize bang cv2 (nhanh), roi chuyen sang HSV va grayscale
+        resized = cv2.resize(self.frame, (self.w, self.h))
+
+        rgb = RGB(resized)
+        self.hsv = rgb.to_hsv()
+        self.gray = rgb.to_gray_scale()
+
+    def compute_his(self, bins, ranges):
         hist = Histogram(self.hsv, bins, ranges)
         self.vec_his = hist.compute()
-        
-    def compute_hog(self,bins,cell_size,block_size):
-        from .hog import HOG
-        hog = HOG(self.gray,bins,cell_size,block_size)
-        self.vec_hog = hog.compute()
-        
-    def compute_vec(self,his_w,hog_w):
-        
+
+    def compute_hog(self, bins, cell_size, block_size):
+        hog = HOG(self.gray, bins, cell_size, block_size)
+        self.vec_hog = hog.vec
+
+    def compute_vec(self, his_w, hog_w):
         self.vec = np.concatenate((self.vec_his * his_w, self.vec_hog * hog_w))
-    

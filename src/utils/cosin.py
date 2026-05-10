@@ -1,8 +1,6 @@
 
 import math
 
-
-@staticmethod
 def cosine_distance(vec_a, vec_b):
     """Tính cosine distance giữa 2 vector.
 

@@ -1,4 +1,4 @@
-from entities.video import Video
+from ..entities.video import Video
 
 
 class VideoRepo:
@@ -8,6 +8,7 @@ class VideoRepo:
     def add_video(self, video):
         self.session.add(video)
         self.session.commit()
+        return video
 
     def get_video_by_id(self, video_id):
         return self.session.query(Video).filter_by(id=video_id).first()

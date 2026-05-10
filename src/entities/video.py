@@ -1,8 +1,7 @@
-from time import timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import String, Float, Integer, BigInteger, Boolean, DateTime, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime
 import uuid
 
 from .base import Base
