@@ -293,3 +293,6 @@ Hệ thống đã:
 ---
 
 ✍️ **Ghi chú:** Có thể mở rộng thành hệ thống thực tế với giao diện web và API phục vụ tìm kiếm đa phương tiện.
+
+- bài báo khoa học 
+- 

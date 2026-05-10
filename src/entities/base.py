@@ -1,12 +1,7 @@
-"""
-Base Database Class - Lớp cơ sở cho tất cả các bảng chiều và sự kiện
-Cung cấp các phương thức chung để làm việc với database
-"""
-
 import pyodbc
 
 
-class DatabaseBase:
+class Base:
     """Base class cho tất cả các bảng"""
     
     def __init__(self, cursor=None, conn=None):

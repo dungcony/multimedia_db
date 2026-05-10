@@ -49,11 +49,11 @@
         - Giúp ảnh resize **mượt hơn, không bị ô vuông** so với nearest neighbor (hàng xóm gần nhất)
 
     - Công thức:
-      ```text
-      pixel   = (1-dx)(1-dy)*P₀₀
-      + dx(1-dy)*P₁₀
-      + dy(1-dx)*P₀₁
-      + dxdy*P₁₁
+
+            pixel   = (1-dx)(1-dy)*P₀₀
+                    + dx(1-dy)*P₁₀
+                    + dy(1-dx)*P₀₁
+                    + dxdy*P₁₁
 
 #### *B3. Chuyển ảnh đã resize sang dạng HSV*
 

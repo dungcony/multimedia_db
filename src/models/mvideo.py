@@ -1,0 +1,171 @@
+from ..utils.cosin import cosine_distance
+import io
+import os
+import time
+import tempfile
+
+import numpy as np
+import requests
+import cv2
+
+from dotenv import load_dotenv
+load_dotenv()
+
+from .mframe import MFrame
+
+
+class MVideo:
+    DOWNLOAD_TIMEOUT = 60
+    DOWNLOAD_RETRIES = 3
+
+    # Cấu hình Histogram (HSV)
+    HIST_BINS = int(os.getenv("HIST_BINS", 8))
+    HIST_RANGES = os.getenv("HIST_RANGES", "0,180,0,256,0,256")
+
+    # Cấu hình HOG
+    HOG_BINS = int(os.getenv("HOG_BINS", 9))
+    HOG_CELL_SIZE = int(os.getenv("HOG_CELL_SIZE", 8))
+    HOG_BLOCK_SIZE = int(os.getenv("HOG_BLOCK_SIZE", 2))
+    HOG_RESIZE = (128, 128)
+
+    # Ngưỡng keyframe
+    HIST_THRESHOLD = float(os.getenv("HIST_THRESHOLD", 0.3))
+    HOG_THRESHOLD = float(os.getenv("HOG_THRESHOLD", 0.3))
+
+    # Trọng số kết hợp vector
+    HIS_W = float(os.getenv("HIS_W", 0.5))
+    HOG_W = float(os.getenv("HOG_W", 0.5))
+
+    def __init__(self, url):
+        self.url = url
+        self.mp4 = None
+        self.frames = []
+        self.fps = None
+        self.frame_count = None
+        self.width = None
+        self.height = None
+        self.duration_sec = None
+        self.file_size_bytes = None
+
+        self.download()
+        self._get_key_frames()
+        self.get_features()
+
+    def download(self):
+        last_error = None
+
+        for attempt in range(1, self.DOWNLOAD_RETRIES + 1):
+            try:
+                response = requests.get(
+                    self.url,
+                    timeout=self.DOWNLOAD_TIMEOUT,
+                    stream=True,
+                )
+                response.raise_for_status()
+
+                buffer = io.BytesIO()
+                for chunk in response.iter_content(chunk_size=8192):
+                    buffer.write(chunk)
+
+                self.mp4 = buffer.getvalue()
+                self.file_size_bytes = len(self.mp4)
+                return self.mp4
+
+            except requests.RequestException as e:
+                last_error = e
+                if attempt < self.DOWNLOAD_RETRIES:
+                    time.sleep(attempt * 2)
+
+        raise requests.RequestException(
+            f"Tải video thất bại sau {self.DOWNLOAD_RETRIES} lần thử: {last_error}"
+        )
+
+    def get_features(self):
+        self.file_size_bytes = len(self.mp4)
+
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
+        try:
+            os.write(tmp_fd, self.mp4)
+            os.close(tmp_fd)
+
+            cap = cv2.VideoCapture(tmp_path)
+            if not cap.isOpened():
+                raise ValueError(f"Không thể mở video: {tmp_path}")
+
+            self.fps = cap.get(cv2.CAP_PROP_FPS)
+            self.frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if self.fps > 0:
+                self.duration_sec = round(self.frame_count / self.fps, 3)
+
+            cap.release()
+
+            return {
+                "fps": self.fps,
+                "frame_count": self.frame_count,
+                "width": self.width,
+                "height": self.height,
+                "duration_sec": self.duration_sec,
+                "file_size_bytes": self.file_size_bytes,
+            }
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def _get_key_frames(self, hist_threshold=None, hog_threshold=None):
+        h_thresh = hist_threshold or self.HIST_THRESHOLD
+        g_thresh = hog_threshold or self.HOG_THRESHOLD
+
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
+        try:
+            os.write(tmp_fd, self.mp4)
+            os.close(tmp_fd)
+
+            cap = cv2.VideoCapture(tmp_path)
+            if not cap.isOpened():
+                raise ValueError(f"Không thể mở video: {tmp_path}")
+
+            self.fps = cap.get(cv2.CAP_PROP_FPS)
+            self.frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if self.fps > 0:
+                self.duration_sec = self.frame_count / self.fps
+
+            keyframes = []
+            prev_mframe = None
+            frame_idx = 0
+
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                timestamp = round(frame_idx / self.fps, 3) if self.fps > 0 else 0.0
+                mf = MFrame(frame, *self.HOG_RESIZE, frame_idx=frame_idx, timestamp_sec=timestamp)
+                mf.compute_his(self.HIST_BINS, self.HIST_RANGES)
+                mf.compute_hog(self.HOG_BINS, self.HOG_CELL_SIZE, self.HOG_BLOCK_SIZE)
+                mf.compute_vec(self.HIS_W, self.HOG_W)
+
+                if prev_mframe is None:
+                    is_keyframe = True
+                else:
+                    hist_dist = cosine_distance(prev_mframe.vec_his, mf.vec_his)
+                    hog_dist = cosine_distance(prev_mframe.vec_hog, mf.vec_hog)
+                    is_keyframe = hist_dist > h_thresh or hog_dist > g_thresh
+
+                if is_keyframe:
+                    keyframes.append(mf)
+                    prev_mframe = mf
+
+                frame_idx += 1
+
+            cap.release()
+            self.frames = keyframes
+            return keyframes
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
