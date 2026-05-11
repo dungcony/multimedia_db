@@ -1,4 +1,3 @@
-from ..utils.cosin import cosine_similarity
 import io
 import os
 import time
@@ -12,6 +11,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .mframe import MFrame
+from .cnn import CNN
+
+
+_cnn = None
+
+
+def get_cnn():
+    global _cnn
+    if _cnn is None:
+        _cnn = CNN()
+    return _cnn
 
 
 class MVideo:
@@ -41,7 +51,7 @@ class MVideo:
     HOG_W = float(os.getenv("HOG_W", 0.5))
     TEXT_W = float(os.getenv("TEXT_W", 0.5))
 
-    def __init__(self, url):
+    def __init__(self, url, cnn=None):
         self.url = url
         self.mp4 = None
         self.frames = []
@@ -51,9 +61,10 @@ class MVideo:
         self.height = None
         self.duration_sec = None
         self.file_size_bytes = None
+        self.cnn = cnn or get_cnn()
 
         self.download()
-        self._get_key_frames()
+        self._get_key_frames_to_cnn(self.cnn)
         self.get_features()
 
     def download(self):
@@ -118,7 +129,68 @@ class MVideo:
         finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
+                
+    def _get_key_frames_to_cnn(self, cnn=None):
+        cnn = cnn or self.cnn or get_cnn()
+        thresh = self.THRESHOLD
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
+        cap = None
+        
+        try:
+            os.write(tmp_fd, self.mp4)
+            os.close(tmp_fd)
 
+            cap = cv2.VideoCapture(tmp_path)
+            if not cap.isOpened():
+                raise ValueError(f"Cannot open video: {tmp_path}")
+
+            self.fps = cap.get(cv2.CAP_PROP_FPS)
+            self.frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if self.fps > 0:
+                self.duration_sec = self.frame_count / self.fps
+
+            keyframes = []
+            prev_mframe = None
+            frame_idx = 0
+
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                timestamp = round(frame_idx / self.fps, 3) if self.fps > 0 else 0.0
+                mf = MFrame(
+                    frame,
+                    new_w=self.HOG_RESIZE[0],
+                    new_h=self.HOG_RESIZE[1],
+                    frame_idx=frame_idx,
+                    timestamp_sec=timestamp,
+                )
+                mf.compute_to_cnn(cnn)
+
+                if prev_mframe is None:
+                    is_keyframe = True
+                else:
+                    cosine = float(np.dot(prev_mframe.vec, mf.vec))
+                    is_keyframe = cosine < thresh
+
+                if is_keyframe:
+                    keyframes.append(mf)
+                    prev_mframe = mf
+
+                frame_idx += 1
+
+            self.frames = keyframes
+            return keyframes
+        finally:
+            # Release cap TRUOC khi xoa file (tranh PermissionError tren Windows)
+            if cap is not None:
+                cap.release()
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+                
     def _get_key_frames(self):
         thresh = self.THRESHOLD
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
@@ -149,7 +221,13 @@ class MVideo:
                     break
 
                 timestamp = round(frame_idx / self.fps, 3) if self.fps > 0 else 0.0
-                mf = MFrame(frame, *self.HOG_RESIZE, frame_idx=frame_idx, timestamp_sec=timestamp)
+                mf = MFrame(
+                    frame,
+                    new_w=self.HOG_RESIZE[0],
+                    new_h=self.HOG_RESIZE[1],
+                    frame_idx=frame_idx,
+                    timestamp_sec=timestamp,
+                )
                 mf.compute_his(self.HIST_BINS, self.HIST_RANGES)
                 mf.compute_hog(self.HOG_BINS, self.HOG_CELL_SIZE, self.HOG_BLOCK_SIZE)
                 mf.compute_texture(self.TEXTURE_LBP_BINS,self.TEXTURE_GLCM_LEVELS,self.TEXTURE_GLCM_DISTANCE,)
@@ -158,7 +236,7 @@ class MVideo:
                 if prev_mframe is None:
                     is_keyframe = True
                 else:
-                    cosine = cosine_similarity(prev_mframe.vec, mf.vec)
+                    cosine = float(np.dot(prev_mframe.vec, mf.vec))
                     is_keyframe = cosine < thresh
 
                 if is_keyframe:

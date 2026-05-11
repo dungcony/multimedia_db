@@ -22,7 +22,7 @@ def read_urls_from_csv(filepath):
     return urls
 
 
-def get_video():
+def get_video(cnn=None):
     urls = read_urls_from_csv(CSV_PATH)
     print(f"  Found {len(urls)} URLs from CSV")
 
@@ -32,7 +32,7 @@ def get_video():
         print(f"  [{i}/{len(urls)}] Processing {short_url}...", end=" ", flush=True)
         t0 = time.time()
         try:
-            mv = MVideo(url)
+            mv = MVideo(url, cnn=cnn)
             t1 = time.time()
             print(
                 f"OK "

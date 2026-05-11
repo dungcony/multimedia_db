@@ -20,7 +20,8 @@ from flask_cors import CORS
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.services.search import search_similar_videos
+from src.models.cnn import CNN
+from src.services.search_to_cnn import search_similar_videos
 
 app = Flask(
     __name__,
@@ -28,6 +29,9 @@ app = Flask(
     static_url_path="/static",
 )
 CORS(app)
+
+# Load CNN model once for the server lifetime
+cnn_model = CNN()
 
 # Giới hạn upload 16MB
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
@@ -100,7 +104,7 @@ def search():
             }), 400
 
         # Tìm kiếm video tương đồng
-        results = search_similar_videos(image_bgr, top_k)
+        results = search_similar_videos(image_bgr, top_k, cnn_model)
 
         return jsonify({
             "success": True,
@@ -119,8 +123,8 @@ def search():
             "error": f"Lỗi xử lý: {str(e)}",
         }), 500
 
-
 if __name__ == "__main__":
+    
     print("=" * 60)
     print("  [*] Multimedia Database - Video Search System")
     print("  [>] http://localhost:5000")

@@ -5,6 +5,7 @@ from .repositories.conn import SessionLocal, engine
 from .repositories.video_repo import VideoRepo
 from .repositories.frame_repo import FrameRepo
 from .entities.base import Base
+from .models.cnn import CNN
 
 
 def create_tables():
@@ -21,11 +22,14 @@ def upload_videos():
     create_tables()
     print("[STEP 0] Done.")
 
+    # Load CNN model once
+    cnn = CNN()
+
     # Step 1: Read CSV + download + extract keyframes
     print("=" * 60)
     print("[STEP 1] Loading videos from CSV...")
     t0 = time.time()
-    mvideos = get_video()
+    mvideos = get_video(cnn=cnn)
     t1 = time.time()
     print(f"[STEP 1] Loaded {len(mvideos)} videos in {t1 - t0:.1f}s")
 
