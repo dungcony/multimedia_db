@@ -295,7 +295,7 @@ $$\mu_r = \sum_{r,c} r \cdot P(r,c), \quad \sigma_r = \sqrt{\sum_{r,c}(r-\mu_r)^
 
 ---
 
-## Bước 4 — Edge Density Map (gh × gw chiều) ← MỚI
+## Bước 4 — Edge Density Map (gh × gw chiều)
 
 ### Ý tưởng
 
@@ -333,7 +333,7 @@ $$\mathbf{v} = [\underbrace{\text{LBP hist}}_{256}, \underbrace{\text{Contrast, 
 
 ```python
 vec = concat([lbp_hist, glcm_stats, edge_density])
-# shape: (276,) với defaults — tăng từ 260 lên 276 so với phiên bản cũ
+# shape: (276,) với defaults
 vec = vec / ||vec||   # L2-normalize lần cuối
 ```
 
@@ -350,4 +350,128 @@ vec = vec / ||vec||   # L2-normalize lần cuối
 | Edge Density Map | 16 | `edge_grid=(4,4)` |
 | **Texture tổng** | **276** | LBP + GLCM + Edge Density |
 
-> **Lưu ý:** Nếu dùng DINOv2 (`CNNExtractor`), vector đặc trưng là **768 chiều** và thay thế hoàn toàn Histogram + HOG + Texture. Cosine similarity của DINOv2 có ý nghĩa thực tế hơn nhiều cho bài toán image retrieval.
+---
+
+# 4. CNN — Trích đặc trưng bằng DINOv2
+
+## Tại sao cần CNN
+
+Pipeline thủ công (Histogram + HOG + Texture) có giới hạn cơ bản không thể vượt qua bằng cách thêm feature:
+
+- Mọi feature thủ công đều mô tả **pixel-level statistics** — màu sắc, cạnh, texture vi mô
+- CNN học được **semantic concepts** — "đây là mặt động vật", "đây là bầu trời"
+- Kết quả thực tế: feature thủ công tốt nhất ~0.65 cosine similarity cho 2 ảnh sư tử khác góc, DINOv2 đạt ~0.82
+
+## Đầu vào / Đầu ra
+
+- **Đầu vào:** Ảnh BGR, shape `(H, W, 3)`, dtype `uint8` — format OpenCV
+- **Đầu ra:** Vector `(768,)`, dtype `float32`, đã L2-normalize
+
+## Quy trình xử lý
+
+### B1. Chuyển màu BGR → RGB
+
+```python
+img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+```
+
+OpenCV đọc ảnh theo thứ tự BGR, model ImageNet yêu cầu RGB.
+
+### B2. Transform chuẩn ImageNet
+
+```python
+transform = Compose([
+    Resize((224, 224)),       # đưa về kích thước cố định
+    ToTensor(),               # (H,W,3) uint8 → (3,H,W) float [0,1]
+    Normalize(
+        mean=[0.485, 0.456, 0.406],   # mean ImageNet theo kênh R,G,B
+        std =[0.229, 0.224, 0.225],   # std  ImageNet theo kênh R,G,B
+    )
+])
+# Output: tensor (3, 224, 224)
+```
+
+Normalize đưa pixel về phân phối chuẩn mà model đã thấy lúc train — bỏ bước này làm feature vector vô nghĩa.
+
+### B3. Forward pass qua DINOv2
+
+```python
+tensor = transform(pil_img).unsqueeze(0)   # (1, 3, 224, 224)
+
+with torch.no_grad():                      # không cần gradient
+    vec = model(tensor)                    # (1, 768)
+
+vec = vec.squeeze().cpu().numpy()          # (768,)
+```
+
+DINOv2 chia ảnh thành các patch 14×14 pixel → `224/14 = 16×16 = 256 patch` → mỗi patch được encode → gộp lại thành vector 768 chiều đại diện toàn ảnh.
+
+### B4. L2-normalize
+
+```python
+norm = np.linalg.norm(vec)
+if norm > 1e-10:
+    vec /= norm
+# ||vec|| = 1 → cosine similarity = dot product đơn giản
+```
+
+## Tính cosine similarity
+
+Vì vector đã L2-normalize, cosine similarity chỉ cần dot product:
+
+```python
+cosine = float(np.dot(vec1, vec2))   # kết quả trong [-1, 1]
+```
+
+## Kết quả kỳ vọng
+
+| Cặp ảnh | Feature thủ công | DINOv2 |
+|---|:---:|:---:|
+| Sư tử vs sư tử (khác góc, khác nền) | ~0.56–0.65 | ~0.78–0.88 |
+| Anime girl vs sư tử | ~0.60–0.67 | ~0.10–0.20 |
+| Sư tử vs voi | ~0.70–0.80 | ~0.40–0.55 |
+
+---
+
+# 5. Giới hạn và kết quả thực tế
+
+## Tại sao không thể đạt chính xác tuyệt đối
+
+### Semantic gap
+
+Bài toán image retrieval về bản chất là ánh xạ từ pixel (số) sang khái niệm ngữ nghĩa (ý nghĩa). Không có thuật toán nào ánh xạ hoàn hảo — kể cả model lớn nhất thế giới. Cosine similarity ~0.9 với cùng loài và ~0.3 với khác loài đã là kết quả rất tốt trong thực tế.
+
+### Curse of dimensionality
+
+Vector càng nhiều chiều, cosine similarity giữa 2 vector ngẫu nhiên càng tiệm cận về một giá trị dương. Đây là hiện tượng toán học thuần túy, không phải lỗi thuật toán.
+
+```python
+# Minh chứng: 2 vector ngẫu nhiên 30000 chiều
+a = np.random.rand(30000)
+b = np.random.rand(30000)
+cosine = np.dot(a / np.linalg.norm(a), b / np.linalg.norm(b))
+# → cosine ≈ 0.65–0.70 dù hoàn toàn ngẫu nhiên
+```
+
+### Intra-class variation
+
+Sư tử chụp ban đêm có thể khác sư tử ban ngày nhiều hơn sư tử vs voi trong cùng điều kiện ánh sáng. Không có feature nào — thủ công hay CNN — hoàn toàn bất biến với góc chụp, ánh sáng, scale.
+
+## Giới hạn của từng phương pháp
+
+| Phương pháp | Phân biệt tốt | Không phân biệt được |
+|---|---|---|
+| Histogram HSV | Màu sắc chủ đạo | Cùng màu nền, khác nội dung |
+| HOG | Cạnh, hướng gradient | Ảnh "mềm" có gradient tương tự |
+| LBP + GLCM | Texture vi mô | Texture tổng thể giống nhau |
+| Edge Density | Phân bố cạnh theo vùng | Nội dung ngữ nghĩa |
+| Gabor Filter | Tần số + hướng texture | Vị trí không gian của object |
+| DINOv2 pretrained | Ngữ nghĩa tổng quát | Domain rất đặc thù (ảnh y tế, công nghiệp) |
+
+## Tại sao không nên tự train CNN từ đầu
+
+DINOv2 được train trên 142 triệu ảnh với hàng nghìn GPU trong nhiều tuần. Tự train từ đầu với ít data hơn sẽ cho kết quả tệ hơn pretrained vì:
+
+- **Thiếu data:** CNN cần tối thiểu hàng chục nghìn ảnh có nhãn. Ít hơn → overfit nghiêm trọng
+- **Thiếu tài nguyên:** Train từ đầu cần GPU mạnh chạy nhiều ngày đến nhiều tuần
+- **Loss function phức tạp:** Image retrieval cần Triplet Loss hoặc Contrastive Loss, không phải classification loss thông thường — cần thuật toán hard negative mining để chọn đúng cặp ảnh huấn luyện
